@@ -11,7 +11,6 @@ namespace RawDiskLib
     public class RawDisk : IDisposable
     {
         private FileAccess _access;
-        private SafeFileHandle _diskHandle;
         private FileStream _diskFs;
         private DiskDeviceWrapper _deviceIo;
         private DISK_GEOMETRY _diskInfo;
@@ -20,34 +19,25 @@ namespace RawDiskLib
         private int _clusterSize;
         private int _sectorsPrCluster;
 
-        public long SizeBytes
-        {
-            get { return _deviceLength; }
-        }
-        public long ClusterCount
-        {
-            get { return _deviceLength / _clusterSize; }
-        }
-        public int ClusterSize
-        {
-            get { return _clusterSize; }
-        }
+        public long SizeBytes => _deviceLength;
 
-        public long SectorCount
-        {
-            get { return _deviceLength / _diskInfo.BytesPerSector; }
-        }
-        public int SectorSize
-        {
-            get { return _diskInfo.BytesPerSector; }
-        }
+        public long ClusterCount => _deviceLength / _clusterSize;
+
+        public int ClusterSize => _clusterSize;
+
+        public long SectorCount => _deviceLength / _diskInfo.BytesPerSector;
+
+        public int SectorSize => _diskInfo.BytesPerSector;
 
         public string DosDeviceName { get; private set; }
 
-        public DISK_GEOMETRY DiskInfo
-        {
-            get { return _diskInfo; }
-        }
+        public DISK_GEOMETRY DiskInfo => _diskInfo;
+
+        /// <summary>
+        /// The actual handle behind the scenes. Used for other Win32 calls.
+        /// Do not close this.
+        /// </summary>
+        public SafeFileHandle DiskHandle { get; private set; }
 
         public RawDisk(DiskNumberType type, int number, FileAccess access = FileAccess.Read)
         {
@@ -105,16 +95,16 @@ namespace RawDiskLib
         {
             Debug.WriteLine("Initiating with " + dosName);
 
-            _diskHandle = PlatformShim.CreateDeviceHandle(dosName, access);
+            DiskHandle = PlatformShim.CreateDeviceHandle(dosName, access);
             DosDeviceName = dosName;
 
-            if (_diskHandle.IsInvalid)
+            if (DiskHandle.IsInvalid)
                 throw new ArgumentException("Invalid diskName: " + dosName);
 
             _access = access;
 
-            _deviceIo = new DiskDeviceWrapper(_diskHandle);
-            _diskFs = new FileStream(_diskHandle, _access);
+            _deviceIo = new DiskDeviceWrapper(DiskHandle);
+            _diskFs = new FileStream(DiskHandle, _access);
 
             _diskInfo = _deviceIo.DiskGetDriveGeometry();
             _deviceLength = _deviceIo.DiskGetLengthInfo();
@@ -226,12 +216,12 @@ namespace RawDiskLib
 
         public void Dispose()
         {
-            if (!_diskHandle.IsClosed)
+            if (!DiskHandle.IsClosed)
             {
 #if NETCORE
-                _diskHandle.Dispose();
+                DiskHandle.Dispose();
 #else
-                _diskHandle.Close();
+                DiskHandle.Close();
 #endif
             }
         }
